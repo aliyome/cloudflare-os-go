@@ -1518,7 +1518,7 @@ export type CloudflareAccountOption = {
 };
 
 /** Supported AI providers. */
-export type AiModelProvider = "openai" | "anthropic" | "google" | "cloudflare" | "ollama";
+export type AiModelProvider = "openai" | "anthropic" | "google" | "cloudflare" | "ollama" | "opencode-go";
 
 /** Information about the AI gateway configuration. Returned by `AuthenticatedApi.getAiConfig()`. */
 export type AiGatewayInfo = {
@@ -1959,6 +1959,20 @@ const SUGGESTED_MODEL_CATALOG = {
     "gemini-3.6-flash": {name: "Gemini 3.6 Flash", contextWindow: 1048576},
   },
   "ollama": {
+  },
+  "opencode-go": {
+    "deepseek-v4.1-flash": {
+      name: "DeepSeek V4.1 Flash", contextWindow: 1000000, outputLimit: 384000,
+    },
+    "kimi-k3": {
+      name: "Kimi K3", contextWindow: 1048576, outputLimit: 131072,
+    },
+    "qwen3.8-max": {
+      name: "Qwen 3.8 Max", contextWindow: 1000000, outputLimit: 131072,
+    },
+    "grok-4.7": {
+      name: "Grok 4.7", contextWindow: 500000, outputLimit: 500000,
+    },
   },
 } satisfies Record<AiModelProvider, Record<string, SuggestedModel>>;
 

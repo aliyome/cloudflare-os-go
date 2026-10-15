@@ -164,7 +164,7 @@ const HAIKU_WITHOUT_OUTPUT_LIMIT = {
 }
 const HAIKU_SUGGESTION = { ...HAIKU_WITHOUT_OUTPUT_LIMIT, outputLimit: 64000 }
 
-const EVERY_PROVIDER: AiModelProvider[] = ['anthropic', 'openai', 'google', 'cloudflare', 'ollama']
+const EVERY_PROVIDER: AiModelProvider[] = ['anthropic', 'openai', 'google', 'cloudflare', 'ollama', 'opencode-go']
 
 /** What is suggested for Anthropic when models.dev lists exactly `entries` under it. */
 const suggestFrom = (...entries: unknown[]) =>

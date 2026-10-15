@@ -40,6 +40,7 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   google: 'AIza...',
   cloudflare: 'Cloudflare API token',
   ollama: '(optional)',
+  'opencode-go': 'OpenCode API key',
 }
 
 // Providers whose client can send no API key at all, so a proxy that extra headers authenticate

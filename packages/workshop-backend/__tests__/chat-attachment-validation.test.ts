@@ -33,6 +33,10 @@ describe("assertChatAttachmentSupportedByProvider", () => {
       .toThrow("Unsupported file type");
     expect(() => assertChatAttachmentSupportedByProvider("ollama", "application/zip", 1))
       .toThrow("Unsupported file type");
+    expect(() => assertChatAttachmentSupportedByProvider("opencode-go", "application/pdf", 1))
+      .not.toThrow();
+    expect(() => assertChatAttachmentSupportedByProvider("opencode-go", "application/zip", 1))
+      .toThrow("Unsupported file type");
   });
 
   it("enforces the per-file byte limit of 4 MiB", () => {

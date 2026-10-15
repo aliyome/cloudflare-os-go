@@ -22,6 +22,7 @@ import {
 } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
 import { GOOGLE_MODELS } from "@earendil-works/pi-ai/providers/google.models";
 import { OPENAI_MODELS } from "@earendil-works/pi-ai/providers/openai.models";
+import { OPENCODE_GO_MODELS } from "@earendil-works/pi-ai/providers/opencode-go.models";
 import { ApprovalQueue, Gatekeeper, ResourceDescription, stripTrailingSlashes } from '@gadgets/workshop-shared/gatekeeper';
 import { LanguageModelBinding } from "./ai-model-binding";
 import AI_MODEL_BINDING_TYPES from "./ai-model-binding.txt";
@@ -149,6 +150,7 @@ const CATALOGS: Partial<Record<AiModelProvider, Record<string, Model<Api>>>> = {
   openai: OPENAI_MODELS,
   google: GOOGLE_MODELS,
   cloudflare: CLOUDFLARE_WORKERS_AI_MODELS,
+  "opencode-go": OPENCODE_GO_MODELS,
 };
 
 // Consult pi's builtin catalog for cost/compat metadata of a known model id. Unknown models are
@@ -361,6 +363,9 @@ export function gatewayReasoningLevels(
 //   passed; effort selection also makes pi request encrypted reasoning content, which -- with
 //   pi's unconditional `store: false` -- keeps requests stateless (ZDR) with reasoning carried
 //   between tool steps.
+// - OpenCode Go (openai-completions): explicit max reasoning effort (or the highest effort the
+//   model supports), so that models with extended thinking (e.g. DeepSeek V4.1 Flash, Kimi K3)
+//   enable their thinking capability by default instead of falling back to non-thinking mode.
 // - Everything else: nothing, which leaves the provider's defaults.
 function builtInReasoning(model: Model<Api>): BuiltInReasoning {
   if (!model.reasoning) return null;
@@ -370,6 +375,10 @@ function builtInReasoning(model: Model<Api>): BuiltInReasoning {
           ? "adaptive" : null;
     case "openai-responses":
       return clampThinkingLevel(model, "medium");
+    case "openai-completions":
+      return model.provider === "opencode-go"
+          ? clampThinkingLevel(model, "max")
+          : null;
     default:
       return null;
   }
@@ -488,9 +497,13 @@ function makeHandle(args: HandleArgs): ModelHandle {
       // This request's own response metadata: concurrent requests on one handle overwrite
       // `lastResponse`, but not this.
       let received: ModelHandle["lastResponse"];
+      const sessionId = options.sessionId ?? args.sessionAffinity;
       const headers: ProviderHeaders = {
         ...args.headers,
         ...options.headers,
+        ...(args.model.provider === "opencode-go" && sessionId
+            ? { "x-opencode-session": sessionId }
+            : {}),
         ...(args.gatewayMetadata
             ? { "cf-aig-metadata": JSON.stringify(args.gatewayMetadata) }
             : {}),
@@ -516,7 +529,7 @@ function makeHandle(args: HandleArgs): ModelHandle {
         ...(args.apiKey !== undefined ? { apiKey: args.apiKey } : {}),
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
         // Session affinity: pi only sends it when caching isn't "none" (fine for us).
-        sessionId: options.sessionId ?? args.sessionAffinity,
+        sessionId,
         onResponse: async (response, responseModel) => {
           received = {
             status: response.status,
@@ -889,6 +902,33 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
         ...directAuth(config, "Authorization"),
         sessionAffinity,
       });
+    case "opencode-go": {
+      const api = catalog?.api ?? "openai-completions";
+      const defaultBaseUrl = api === "anthropic-messages"
+          ? "https://opencode.ai/zen/go"
+          : "https://opencode.ai/zen/go/v1";
+      return makeHandle({
+        model: {
+          id: config.model,
+          name: catalog?.name ?? config.model,
+          api,
+          provider: "opencode-go",
+          baseUrl: config.apiUrl ?? catalog?.baseUrl ?? defaultBaseUrl,
+          reasoning: catalog?.reasoning ?? true,
+          input: catalog?.input ?? ["text", "image"],
+          cost: catalog?.cost ?? ZERO_COST,
+          ...window,
+          thinkingLevelMap: catalog?.thinkingLevelMap,
+          compat: catalog?.compat,
+        },
+        apiKey: config.apiToken,
+        headers: {
+          "User-Agent": "cloudflare-os/1.0",
+          ...config.extraHeaders,
+        },
+        sessionAffinity,
+      });
+    }
     default:
       config.provider satisfies never;
       throw new Error(`Unknown provider "${config.provider}".`);

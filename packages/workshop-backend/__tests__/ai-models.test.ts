@@ -670,6 +670,59 @@ describe("getModel direct routing (no gateway)", () => {
     expect(request.headers.get("authorization")).toBe("Basic dXNlcjpwYXNz");
   }, 15000);
 
+  it("sends x-opencode-session and user-agent for OpenCode Go", async () => {
+    const handle = getModel(env({ CF_AI_GATEWAY: undefined }), {
+      provider: "opencode-go",
+      model: "deepseek-v4.1-flash",
+      apiToken: "opencode-test-token",
+    }, INITIATOR, { sessionAffinity: "session-12345" });
+
+    const request = await captureRequest(handle);
+    expect(request.url).toBe("https://opencode.ai/zen/go/v1/chat/completions");
+    expect(request.headers.get("x-opencode-session")).toBe("session-12345");
+    expect(request.headers.get("user-agent")).toBe("cloudflare-os/1.0");
+    expect(request.headers.get("authorization")).toBe("Bearer opencode-test-token");
+  }, 15000);
+
+  it("enables max reasoning effort for OpenCode Go reasoning models by default", async () => {
+    const handle = getModel(env({ CF_AI_GATEWAY: undefined }), {
+      provider: "opencode-go",
+      model: "deepseek-v4.1-flash",
+      apiToken: "opencode-test-token",
+    }, INITIATOR, { sessionAffinity: "session-12345" });
+
+    const request = await captureRequest(handle);
+    const body = JSON.parse(request.body);
+    expect(body.thinking).toEqual({ type: "enabled" });
+    expect(body.reasoning_effort).toBe("max");
+  }, 15000);
+
+  it("omits reasoning effort for quick OpenCode Go requests", async () => {
+    const handle = getModel(env({ CF_AI_GATEWAY: undefined }), {
+      provider: "opencode-go",
+      model: "deepseek-v4.1-flash",
+      apiToken: "opencode-test-token",
+    }, INITIATOR, { sessionAffinity: "session-12345" });
+
+    const request = await captureRequest(handle, { thinking: false });
+    const body = JSON.parse(request.body);
+    expect(body.thinking).toBeUndefined();
+    expect(body.reasoning_effort).toBeUndefined();
+  }, 15000);
+
+  it("routes OpenCode Go models with anthropic-messages api to the messages endpoint", async () => {
+    const handle = getModel(env({ CF_AI_GATEWAY: undefined }), {
+      provider: "opencode-go",
+      model: "minimax-m3",
+      apiToken: "opencode-test-token",
+    }, INITIATOR, { sessionAffinity: "session-67890" });
+
+    const request = await captureRequest(handle);
+    expect(request.url).toBe("https://opencode.ai/zen/go/v1/messages?beta=true");
+    expect(request.headers.get("x-opencode-session")).toBe("session-67890");
+    expect(request.headers.get("user-agent")).toBe("cloudflare-os/1.0");
+  }, 15000);
+
   it("ignores extra headers when routing through AI Gateway", async () => {
     const handle = getModel(env(), {
       ...ANTHROPIC_CONFIG,
@@ -1011,6 +1064,10 @@ describe("gateway model reasoning levels", () => {
     ["cloudflare", "@cf/deepseek-ai/deepseek-v4-pro-0813", null],
     ["cloudflare", "@cf/cloudflare/clef", null],
     ["cloudflare", "@cf/cloudflare/clef-flash", null],
+    ["opencode-go", "deepseek-v4.1-flash", null],
+    ["opencode-go", "kimi-k3", null],
+    ["opencode-go", "qwen3.8-max", null],
+    ["opencode-go", "grok-4.7", null],
   ];
   it.each(BUILT_IN)("says what %s model %s is asked for while no level is set",
       (provider, model, builtIn) => {
@@ -1108,6 +1165,7 @@ describe("gateway model reasoning levels", () => {
 
   it("knows a model by an entry of its own, under its own provider", () => {
     expect(isRuntimeModel("anthropic", "claude-opus-5-5")).toBe(true);
+    expect(isRuntimeModel("opencode-go", "deepseek-v4.1-flash")).toBe(true);
     expect(isRuntimeModel("openai", "claude-opus-5-5")).toBe(false);
     expect(isRuntimeModel("anthropic", "claude-next")).toBe(false);
     expect(isRuntimeModel("ollama", "qwen3:8b")).toBe(false);
